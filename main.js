@@ -14,13 +14,9 @@ class HMACCalculator {
     }
 }
 
-class NonTransitiveGame {
+class MoveGenerator {
     constructor(moves) {
         this.moves = moves;
-        this.generateResults();
-        this.computerMove = this.generateRandomMove();
-        this.hmacCalculator = new HMACCalculator();
-        this.computerHmac = this.hmacCalculator.calculateHMAC(this.computerMove);
     }
 
     generateRandomMove() {
@@ -28,16 +24,53 @@ class NonTransitiveGame {
         const randomIndex = random.integer(0, this.moves.length - 1);
         return this.moves[randomIndex];
     }
+}
 
-    generateResults() {
-        this.results = {};
+class ResultsTable {
+    constructor(moves, gameLogic) {
+        this.moves = moves;
+        this.gameLogic = gameLogic;
+        this.generateTable();
+    }
+
+    generateTable() {
+        this.table = [[' User/Computer', ...this.moves]];
         for (let i = 0; i < this.moves.length; i++) {
-            const currentMove = this.moves[i];
-            const nextMoveIndex = (i + 1) % this.moves.length;
-            const nextMove = this.moves[nextMoveIndex];
-
-            this.results[currentMove] = nextMove;
+            const row = [this.moves[i]];
+            for (let j = 0; j < this.moves.length; j++) {
+                const result = this.gameLogic.determineWinner(this.moves[i], this.moves[j]);
+                row.push(result);
+            }
+            this.table.push(row);
         }
+    }
+
+    formatTable() {
+        const colWidths = this.table[0].map((_, colIndex) =>
+            Math.max(...this.table.map(row => row[colIndex].length))
+        );
+
+        const separator = colWidths.map(width => '-'.repeat(width)).join('-+-');
+
+        const formattedRows = this.table.map(row =>
+            row.map((cell, colIndex) => cell.padEnd(colWidths[colIndex])).join(' | ')
+        );
+
+        return formattedRows.map((row, rowIndex) =>
+            (rowIndex === 1 ? separator + '\n' : '') + row + '\n'
+        ).join('') + separator;
+    }
+}
+
+class NonTransitiveGame {
+    constructor(moves) {
+        this.moves = moves;
+        this.moveGenerator = new MoveGenerator(moves);
+        this.gameLogic = new GameLogic(moves);
+        this.resultsTable = new ResultsTable(moves, this.gameLogic);
+        this.computerMove = this.moveGenerator.generateRandomMove();
+        this.hmacCalculator = new HMACCalculator();
+        this.computerHmac = this.hmacCalculator.calculateHMAC(this.computerMove);
     }
 
     displayHelp() {
@@ -45,36 +78,7 @@ class NonTransitiveGame {
         console.log('This table shows the results for the user.');
         console.log('To find out who wins, locate your move in the "User" column,');
         console.log('then go to the corresponding row and column to see the result.');
-        console.log('');
-
-        const table = [[' User/Computer', ...this.moves]];
-        for (let i = 0; i < this.moves.length; i++) {
-            const row = [this.moves[i]];
-            for (let j = 0; j < this.moves.length; j++) {
-                const result = this.determineWinner(this.moves[i], this.moves[j]);
-                row.push(result);
-            }
-            table.push(row);
-        }
-
-        console.log('\n\x1b[36mGame Results (from the user\'s perspective):\x1b[0m');
-        console.log(this.formatTable(table));
-    }
-
-    formatTable(table) {
-        const colWidths = table[0].map((_, colIndex) =>
-            Math.max(...table.map(row => row[colIndex].length))
-        );
-
-        const separator = colWidths.map(width => '-'.repeat(width)).join('-+-');
-
-        const formattedRows = table.map(row =>
-            row.map((cell, colIndex) => cell.padEnd(colWidths[colIndex])).join(' | ')
-        );
-
-        return formattedRows.map((row, rowIndex) =>
-            (rowIndex === 1 ? separator + '\n' : '') + row + '\n'
-        ).join('') + separator;
+        console.log('Type "?" or "help" as a move to see the game results table.\n');
     }
 
     play() {
@@ -83,6 +87,7 @@ class NonTransitiveGame {
             console.log(`${index + 1} - ${move}`);
         });
         console.log('0 - Exit');
+        console.log('? - Show game results'); // Добавлено здесь
 
         const rl = readline.createInterface({
             input: process.stdin,
@@ -93,6 +98,10 @@ class NonTransitiveGame {
             rl.close();
             if (input === '0') {
                 process.exit(0);
+            } else if (input.toLowerCase() === '?' || input.toLowerCase() === 'help') {
+                this.displayHelp();
+                console.log('\n\x1b[36mGame Results (from the user\'s perspective):\x1b[0m');
+                console.log(this.resultsTable.formatTable());
             } else if (isNaN(input) || input < 1 || input > this.moves.length) {
                 console.log('Invalid input. Please enter a valid move.');
             } else {
@@ -103,11 +112,27 @@ class NonTransitiveGame {
                 console.log(`Computer's move: ${this.computerMove}`);
                 console.log(`Your HMAC move: ${this.hmacCalculator.calculateHMAC(playerMove)}`);
 
-                const result = this.determineWinner(playerMove, this.computerMove);
+                const result = this.gameLogic.determineWinner(playerMove, this.computerMove);
                 console.log(result);
             }
         });
         this.displayHelp();
+    }
+}
+
+class GameLogic {
+    constructor(moves) {
+        this.moves = moves;
+        this.generateResults();
+    }
+
+    generateResults() {
+        this.results = {};
+        for (let i = 0; i < this.moves.length; i++) {
+            const currentMove = this.moves[i];
+            const nextMoveIndex = (i + 1) % this.moves.length;
+            this.results[currentMove] = this.moves[nextMoveIndex];
+        }
     }
 
     determineWinner(playerMove, computerMove) {
