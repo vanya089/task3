@@ -65,6 +65,18 @@ class ResultsTable {
 class NonTransitiveGame {
     constructor(moves) {
         this.moves = moves;
+
+        const distinctMoves = new Set(this.moves);
+        if (distinctMoves.size !== this.moves.length) {
+            console.error('Error: Duplicate moves detected. Please enter distinct moves.');
+            process.exit(1);
+        }
+
+        if (this.moves.length < 3 || this.moves.length % 2 !== 1) {
+            console.error('Invalid input. Please enter an odd number of at least three moves.');
+            process.exit(1);
+        }
+
         this.moveGenerator = new MoveGenerator(moves);
         this.gameLogic = new GameLogic(moves);
         this.resultsTable = new ResultsTable(moves, this.gameLogic);
@@ -83,11 +95,11 @@ class NonTransitiveGame {
 
     play() {
         console.log('Available moves:');
+        console.log('? - Show game results');
         this.moves.forEach((move, index) => {
             console.log(`${index + 1} - ${move}`);
         });
         console.log('0 - Exit');
-        console.log('? - Show game results'); // Добавлено здесь
 
         const rl = readline.createInterface({
             input: process.stdin,
@@ -156,10 +168,6 @@ rl.question('Enter moves (separated by spaces): ', (input) => {
 
     const moves = input.split(' ');
 
-    if (moves.length < 3) {
-        console.error('Invalid input. Please enter at least three moves.');
-    } else {
-        const game = new NonTransitiveGame(moves);
-        game.play();
-    }
+    const game = new NonTransitiveGame(moves);
+    game.play();
 });
