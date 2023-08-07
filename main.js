@@ -65,24 +65,10 @@ class ResultsTable {
 class NonTransitiveGame {
     constructor(moves) {
         this.moves = moves;
-
-        const distinctMoves = new Set(this.moves);
-        if (distinctMoves.size !== this.moves.length) {
-            console.error('Error: Duplicate moves detected. Please enter distinct moves.');
-            process.exit(1);
-        }
-
-        if (this.moves.length < 3 || this.moves.length % 2 !== 1) {
-            console.error('Invalid input. Please enter an odd number of at least three moves.');
-            process.exit(1);
-        }
-
         this.moveGenerator = new MoveGenerator(moves);
         this.gameLogic = new GameLogic(moves);
         this.resultsTable = new ResultsTable(moves, this.gameLogic);
-        this.computerMove = this.moveGenerator.generateRandomMove();
         this.hmacCalculator = new HMACCalculator();
-        this.computerHmac = this.hmacCalculator.calculateHMAC(this.computerMove);
     }
 
     displayHelp() {
@@ -93,42 +79,56 @@ class NonTransitiveGame {
         console.log('Type "?" or "help" as a move to see the game results table.\n');
     }
 
-    play() {
+    async play() {
         console.log('Available moves:');
-        console.log('? - Show game results');
         this.moves.forEach((move, index) => {
             console.log(`${index + 1} - ${move}`);
         });
         console.log('0 - Exit');
+        console.log('? - Show game results');
 
         const rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout
         });
 
-        rl.question('Enter your move: ', (input) => {
-            rl.close();
-            if (input === '0') {
-                process.exit(0);
-            } else if (input.toLowerCase() === '?' || input.toLowerCase() === 'help') {
-                this.displayHelp();
-                console.log('\n\x1b[36mGame Results (from the user\'s perspective):\x1b[0m');
-                console.log(this.resultsTable.formatTable());
-            } else if (isNaN(input) || input < 1 || input > this.moves.length) {
-                console.log('Invalid input. Please enter a valid move.');
-            } else {
-                const playerMove = this.moves[input - 1];
-                console.log(`Your move: ${playerMove}`);
-                console.log(`Computer's HMAC move: ${this.computerHmac}`);
-                console.log(`Enter HMAC key: ${this.hmacCalculator.key}`);
-                console.log(`Computer's move: ${this.computerMove}`);
-                console.log(`Your HMAC move: ${this.hmacCalculator.calculateHMAC(playerMove)}`);
+        const selectedMove = await this.askQuestion(rl, 'Enter your move: ');
 
-                const result = this.gameLogic.determineWinner(playerMove, this.computerMove);
-                console.log(result);
-            }
+        if (selectedMove === '0') {
+            rl.close();
+            process.exit(0);
+        } else if (selectedMove.toLowerCase() === '?' || selectedMove.toLowerCase() === 'help') {
+            this.displayHelp();
+            console.log('\n\x1b[36mGame Results (from the user\'s perspective):\x1b[0m');
+            console.log(this.resultsTable.formatTable());
+        } else if (isNaN(selectedMove) || selectedMove < 1 || selectedMove > this.moves.length) {
+            console.log('Invalid input. Please enter a valid move.');
+        } else {
+            const playerMove = this.moves[selectedMove - 1];
+            this.playComputer(playerMove);
+        }
+    }
+
+    async askQuestion(rl, question) {
+        return new Promise(resolve => {
+            rl.question(question, answer => {
+                resolve(answer);
+            });
         });
-        this.displayHelp();
+    }
+
+    playComputer(playerMove) {
+        const computerMove = this.moveGenerator.generateRandomMove();
+        const computerHmac = this.hmacCalculator.calculateHMAC(computerMove);
+
+        console.log(`Your move: ${playerMove}`);
+        console.log(`Computer's HMAC move: ${computerHmac}`);
+        console.log(`Enter HMAC key: ${this.hmacCalculator.key}`);
+        console.log(`Computer's move: ${computerMove}`);
+        console.log(`Your HMAC move: ${this.hmacCalculator.calculateHMAC(playerMove)}`);
+
+        const result = this.gameLogic.determineWinner(playerMove, computerMove);
+        console.log(result);
     }
 }
 
@@ -158,16 +158,11 @@ class GameLogic {
     }
 }
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
+const moves = process.argv.slice(2);
 
-rl.question('Enter moves (separated by spaces): ', (input) => {
-    rl.close();
-
-    const moves = input.split(' ');
-
+if (moves.length < 3 || moves.length % 2 !== 1 || new Set(moves).size !== moves.length) {
+    console.error('Invalid input. Please enter an odd number of distinct moves (at least three).');
+} else {
     const game = new NonTransitiveGame(moves);
     game.play();
-});
+}
